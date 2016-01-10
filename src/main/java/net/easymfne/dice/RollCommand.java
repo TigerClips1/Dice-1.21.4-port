@@ -1,14 +1,14 @@
 /*
  * This file is part of the Dice plugin by EasyMFnE.
- * 
+ *
  * Dice is free software: you can redistribute it and/or modify it under the
  * terms of the GNU General Public License as published by the Free Software
  * Foundation, either version 3 of the License, or any later version.
- * 
+ *
  * Dice is distributed in the hope that it will be useful, but without any
  * warranty; without even the implied warranty of merchantability or fitness for
  * a particular purpose. See the GNU General Public License for details.
- * 
+ *
  * You should have received a copy of the GNU General Public License v3 along
  * with Dice. If not, see <http://www.gnu.org/licenses/>.
  */
@@ -17,6 +17,7 @@ package net.easymfne.dice;
 import java.util.Random;
 
 import org.apache.commons.lang.StringUtils;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -25,18 +26,18 @@ import org.bukkit.entity.Player;
 
 /**
  * The class that handles all console and player commands for the plugin.
- * 
+ *
  * @author Eric Hildebrand
  */
 public class RollCommand implements CommandExecutor {
-    
+
     private Dice plugin = null;
     private Random random;
-    
+
     /**
      * Instantiate by getting a reference to the plugin instance, creating a new
      * Random, and registering this class to handle the '/roll' command.
-     * 
+     *
      * @param plugin
      *            Reference to Dice plugin instance
      */
@@ -45,13 +46,13 @@ public class RollCommand implements CommandExecutor {
         random = new Random();
         plugin.getCommand("roll").setExecutor(this);
     }
-    
+
     /**
      * Broadcast the results of a dice roll to the players of the server.
      * Configuration can be set so that messages are only set within the world
      * that the player resides, and also within a certain distance of them. Dice
      * rolled by non-players (e.g. the Console) are sent to all players.
-     * 
+     *
      * @param sender
      *            The user rolling the dice
      * @param message
@@ -62,11 +63,11 @@ public class RollCommand implements CommandExecutor {
             return;
         }
         Player p1 = (sender instanceof Player ? (Player) sender : null);
-        
+
         if (plugin.getPluginConfig().isLogging()) {
             plugin.getLogger().info(message);
         }
-        
+
         for (Player p2 : plugin.getServer().getOnlinePlayers()) {
             if (plugin.getPluginConfig().isCrossworld() || p1 == null
                     || p1.getWorld() == p2.getWorld()) {
@@ -79,19 +80,19 @@ public class RollCommand implements CommandExecutor {
             }
         }
     }
-    
+
     /**
      * Release the '/roll' command from its ties to this class.
      */
     public void close() {
         plugin.getCommand("roll").setExecutor(null);
     }
-    
+
     /**
      * Format and return a String that will be used to display the roll results.
      * This method replaces tags: {PLAYER}, {RESULT}, {COUNT}, {SIDES}, {TOTAL}.
      * This method also replaces '&' style color codes with proper ChatColors.
-     * 
+     *
      * @param sender
      *            The user that rolled the dice
      * @param roll
@@ -117,10 +118,10 @@ public class RollCommand implements CommandExecutor {
         result = result.replaceAll("\\{TOTAL}", "" + sum(roll));
         return ChatColor.translateAlternateColorCodes('&', result);
     }
-    
+
     /**
      * Get the squared distance between two players.
-     * 
+     *
      * @param p1
      *            Player one
      * @param p2
@@ -133,10 +134,10 @@ public class RollCommand implements CommandExecutor {
         int dz = p1.getLocation().getBlockZ() - p2.getLocation().getBlockZ();
         return dx * dx + dy * dy + dz * dz;
     }
-    
+
     /**
      * Show the results of a roll to a player privately.
-     * 
+     *
      * @param sender
      *            The user rolling the dice
      * @param message
@@ -148,7 +149,7 @@ public class RollCommand implements CommandExecutor {
         }
         sender.sendMessage(message);
     }
-    
+
     /**
      * This method handles user commands. Usage: "/roll <help,reload>" which
      * either shows help or reloads config. Usage: "/roll [count] [d<sides>]"
@@ -170,10 +171,10 @@ public class RollCommand implements CommandExecutor {
                 return true;
             }
         }
-        
+
         int count = plugin.getPluginConfig().getDefaultCount();
         int sides = plugin.getPluginConfig().getDefaultSides();
-        
+
         /* Check for arguments representing dice count */
         if (args.length > 0 && Perms.canRollMultiple(sender)) {
             for (String arg : args) {
@@ -192,7 +193,7 @@ public class RollCommand implements CommandExecutor {
                 }
             }
         }
-        
+
         /* Check the loaded or parsed values against the defined maximums. */
         if (count > plugin.getPluginConfig().getMaximumCount()) {
             sender.sendMessage(ChatColor.RED
@@ -204,16 +205,16 @@ public class RollCommand implements CommandExecutor {
                     + "You can't roll dice with that many sides");
             return false;
         }
-        
+
         /* Roll the dice and handle the outcome */
         roll(sender, Math.max(1, count), Math.max(2, sides));
         return true;
     }
-    
+
     /**
      * Roll a set of dice for a user, and either broadcast the results publicly
      * or send them privately, depending on the user's permissions.
-     * 
+     *
      * @param sender
      *            The user rolling the dice
      * @param count
@@ -226,17 +227,25 @@ public class RollCommand implements CommandExecutor {
         for (int i = 0; i < count; i++) {
             result[i] = random.nextInt(sides) + 1;
         }
+
+        String finalOut = formatString(sender, result, sides);
+
+        // send out a custom event
+        DiceRolled event = new DiceRolled(finalOut, result);
+        // Call the event
+        Bukkit.getServer().getPluginManager().callEvent(event);
+
         if (Perms.broadcast(sender)) {
-            broadcast(sender, formatString(sender, result, sides));
+            broadcast(sender, finalOut);
         } else {
-            message(sender, formatString(sender, result, sides));
+            message(sender, finalOut);
         }
     }
-    
+
     /**
      * Show personalized usage help to the user, taking into account his or her
      * permissions.
-     * 
+     *
      * @param sender
      *            The user to help
      */
@@ -259,10 +268,10 @@ public class RollCommand implements CommandExecutor {
             sender.sendMessage(ChatColor.RED + "Usage: /roll");
         }
     }
-    
+
     /**
      * Square an input. Useful for decluttering the code.
-     * 
+     *
      * @param input
      *            The number to be squared
      * @return The result
@@ -270,10 +279,10 @@ public class RollCommand implements CommandExecutor {
     private int square(int input) {
         return input * input;
     }
-    
+
     /**
      * Calculate the sum of an array of numbers.
-     * 
+     *
      * @param roll
      *            The array of numbers
      * @return The sum
@@ -285,5 +294,5 @@ public class RollCommand implements CommandExecutor {
         }
         return t;
     }
-    
+
 }
