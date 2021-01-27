@@ -14,14 +14,24 @@
  */
 package net.easymfne.dice;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Random;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang.StringUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Sound;
+import org.bukkit.SoundCategory;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 
 /**
@@ -29,22 +39,28 @@ import org.bukkit.entity.Player;
  *
  * @author Eric Hildebrand
  */
-public class RollCommand implements CommandExecutor {
+public class RollCommand implements CommandExecutor, TabCompleter {
 
-    private Dice plugin = null;
-    private Random random;
+    private final Dice plugin;
+    private final Random random = new Random();
+    private final Set<String> colors = new HashSet(Arrays.asList(
+            "BLACK", "DARK_BLUE", "DARK_GREEN", "DARK_AQUA", "DARK_RED",
+            "DARK_PURPLE", "GOLD", "GRAY", "DARK_GRAY", "BLUE", "GREEN",
+            "AQUA", "RED", "LIGHT_PURPLE", "YELLOW", "WHITE", "MAGIC",
+            "BOLD", "STRIKETHROUGH", "UNDERLINE", "ITALIC", "RESET")
+    );
+    private final HashMap<Player, Long> lastCall = new HashMap<>();
 
     /**
      * Instantiate by getting a reference to the plugin instance, creating a new
      * Random, and registering this class to handle the '/roll' command.
      *
-     * @param plugin
-     *            Reference to Dice plugin instance
+     * @param plugin Reference to Dice plugin instance
      */
     public RollCommand(Dice plugin) {
         this.plugin = plugin;
-        random = new Random();
         plugin.getCommand("roll").setExecutor(this);
+        plugin.getCommand("roll").setTabCompleter(this);
     }
 
     /**
@@ -53,10 +69,8 @@ public class RollCommand implements CommandExecutor {
      * that the player resides, and also within a certain distance of them. Dice
      * rolled by non-players (e.g. the Console) are sent to all players.
      *
-     * @param sender
-     *            The user rolling the dice
-     * @param message
-     *            The fully-formatted message to display
+     * @param sender The user rolling the dice
+     * @param message The fully-formatted message to display
      */
     private void broadcast(CommandSender sender, String message) {
         if (message == null) {
@@ -68,14 +82,45 @@ public class RollCommand implements CommandExecutor {
             plugin.getLogger().info(message);
         }
 
-        for (Player p2 : plugin.getServer().getOnlinePlayers()) {
-            if (plugin.getPluginConfig().isCrossworld() || p1 == null
-                    || p1.getWorld() == p2.getWorld()) {
-                if (plugin.getPluginConfig().getBroadcastRange() < 0
+        if (p1 != null && plugin.getPluginConfig().broadcast_useChannel) {
+            if (plugin.getPluginConfig().useLegendChat) {
+                br.com.devpaulo.legendchat.channels.types.Channel ch
+                        = br.com.devpaulo.legendchat.api.Legendchat.getPlayerManager().getPlayerFocusedChannel(p1);
+                ChatColor color1 = ChatColor.WHITE;
+                ChatColor color2 = ChatColor.WHITE;
+
+                final String colorStr = ch.getStringColor().toUpperCase();
+                if (colors.contains(colorStr)) {
+                    color2 = ChatColor.valueOf(colorStr);
+                }
+
+                final String format = br.com.devpaulo.legendchat.api.Legendchat.format(ch.getFormat());
+                int firstColorI = format.indexOf('&');
+                if (firstColorI != -1 && firstColorI < 20) {
+                    color1 = ChatColor.getByChar(format.charAt(firstColorI + 1));
+                } else {
+                    color1 = color2;
+                }
+
+                // This first bit is a hack, I admit. Probably need a better solution for channel identification.
+                message = color1.toString() + "[" + ch.getNickname() + "] "
+                        + message.replace("{CHANNEL}", color2.toString());
+
+                ch.sendMessage(message);
+            }
+            // TODO? add more plugins?
+        } else {
+            message = message.replace("{CHANNEL}", "");
+            double dSquared = square(plugin.getPluginConfig().getBroadcastRange());
+            for (Player p2 : plugin.getServer().getOnlinePlayers()) {
+                if (plugin.getPluginConfig().isCrossworld()
                         || p1 == null
-                        || getDSquared(p1, p2) < square(plugin
-                                .getPluginConfig().getBroadcastRange())) {
-                    p2.sendMessage(message);
+                        || p1.getWorld() == p2.getWorld()) {
+                    if (plugin.getPluginConfig().getBroadcastRange() < 0
+                            || p1 == null
+                            || getDSquared(p1, p2) < dSquared) {
+                        p2.sendMessage(message);
+                    }
                 }
             }
         }
@@ -86,6 +131,7 @@ public class RollCommand implements CommandExecutor {
      */
     public void close() {
         plugin.getCommand("roll").setExecutor(null);
+        plugin.getCommand("roll").setTabCompleter(null);
     }
 
     /**
@@ -93,39 +139,98 @@ public class RollCommand implements CommandExecutor {
      * This method replaces tags: {PLAYER}, {RESULT}, {COUNT}, {SIDES}, {TOTAL}.
      * This method also replaces '&' style color codes with proper ChatColors.
      *
-     * @param sender
-     *            The user that rolled the dice
-     * @param roll
-     *            The results of the roll, as an array
-     * @param sides
-     *            The number of sides on the dice
+     * @param sender The user that rolled the dice
+     * @param roll The results of the roll, as an array
+     * @param sides The number of sides on the dice
      * @return The fancy-formatted message
      */
     private String formatString(CommandSender sender, Integer[] roll, int sides) {
         String result;
         if (Perms.broadcast(sender)) {
-            result = plugin.getPluginConfig().getBroadcastMessage();
+            if (roll.length > 1) {
+                result = plugin.getPluginConfig().message_broadcast_multi;
+            } else {
+                result = plugin.getPluginConfig().getBroadcastMessage();
+            }
         } else {
             result = plugin.getPluginConfig().getPrivateMessage();
         }
         if (result == null || result.length() == 0) {
             return null;
         }
-        result = result.replaceAll("\\{PLAYER}", sender.getName());
-        result = result.replaceAll("\\{RESULT}", StringUtils.join(roll, ", "));
-        result = result.replaceAll("\\{COUNT}", "" + roll.length);
-        result = result.replaceAll("\\{SIDES}", "" + sides);
-        result = result.replaceAll("\\{TOTAL}", "" + sum(roll));
+        result = result
+                .replace("{PLAYER}", sender.getName())
+                .replace("{NICKNAME}", formatName(sender))
+                .replace("{RESULT}", plugin.getPluginConfig().natColors_enabled ? formatResults(roll, sides) : StringUtils.join(roll, ", "))
+                .replace("{COUNT}", String.valueOf(roll.length))
+                .replace("{SIDES}", String.valueOf(sides))
+                .replace("{TOTAL}", plugin.getPluginConfig().natColors_enabled ? formatResultTotal(roll, sides) : String.valueOf(sum(roll)));
         return ChatColor.translateAlternateColorCodes('&', result);
+    }
+
+    private String formatResultTotal(Integer[] roll, int max) {
+        int median = (int) Math.floor(max / 3.) * roll.length;
+        max *= roll.length;
+        int total = sum(roll);
+
+        if (total == roll.length) {
+            return plugin.getPluginConfig().natColors_critfail + total;
+        } else if (total == max) {
+            return plugin.getPluginConfig().natColors_critcrit + total;
+        } else if (total < median) {
+            return plugin.getPluginConfig().natColors_fail + total;
+        } else if (total > max - median) {
+            return plugin.getPluginConfig().natColors_crit + total;
+        }
+        return plugin.getPluginConfig().natColors_normal + total;
+    }
+
+    private String formatResults(Integer[] roll, int max) {
+        int median = (int) Math.floor(max / 3.);
+        if (roll.length == 1) {
+            if (roll[0] == 1) {
+                return plugin.getPluginConfig().natColors_critfail + roll[0];
+            } else if (roll[0] == max) {
+                return plugin.getPluginConfig().natColors_critcrit + roll[0];
+            } else if (roll[0] < median) {
+                return plugin.getPluginConfig().natColors_fail + roll[0];
+            } else if (roll[0] > max - median) {
+                return plugin.getPluginConfig().natColors_crit + roll[0];
+            }
+            return plugin.getPluginConfig().natColors_normal + roll[0];
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = roll.length - 1; i >= 0; --i) {
+            if (roll[i] == 1) {
+                sb.append(plugin.getPluginConfig().natColors_critfail).append(roll[i]);
+            } else if (roll[i] == max) {
+                sb.append(plugin.getPluginConfig().natColors_critcrit).append(roll[i]);
+            } else if (roll[i] < median) {
+                sb.append(plugin.getPluginConfig().natColors_fail).append(roll[i]);
+            } else if (roll[i] > max - median) {
+                sb.append(plugin.getPluginConfig().natColors_crit).append(roll[i]);
+            } else {
+                sb.append(plugin.getPluginConfig().natColors_normal).append(roll[i]);
+            }
+            if (i != 0) {
+                sb.append(", ");
+            }
+        }
+        return sb.toString();
+    }
+
+    private String formatName(CommandSender sender) {
+        if (sender instanceof Player) {
+            return ((Player) sender).getDisplayName().replaceAll("[^A-Za-z0-9_]", "");
+        }
+        return sender.getName();
     }
 
     /**
      * Get the squared distance between two players.
      *
-     * @param p1
-     *            Player one
-     * @param p2
-     *            Player two
+     * @param p1 Player one
+     * @param p2 Player two
      * @return The distance^2
      */
     private int getDSquared(Player p1, Player p2) {
@@ -138,10 +243,8 @@ public class RollCommand implements CommandExecutor {
     /**
      * Show the results of a roll to a player privately.
      *
-     * @param sender
-     *            The user rolling the dice
-     * @param message
-     *            The fully-formatted message to display
+     * @param sender The user rolling the dice
+     * @param message The fully-formatted message to display
      */
     private void message(CommandSender sender, String message) {
         if (message == null) {
@@ -157,8 +260,7 @@ public class RollCommand implements CommandExecutor {
      * must be prefixed with 'd'.
      */
     @Override
-    public boolean onCommand(CommandSender sender, Command command,
-            String label, String[] args) {
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 1) {
             if (args[0].equalsIgnoreCase("help")
                     || args[0].equalsIgnoreCase("?")) {
@@ -172,6 +274,19 @@ public class RollCommand implements CommandExecutor {
             }
         }
 
+        if (sender instanceof Player) {
+            final Player p = (Player) sender;
+            long now = System.currentTimeMillis();
+            Long last = lastCall.get(p);
+            if (last != null && now - last < 5600) {
+                p.playSound(p.getEyeLocation(), Sound.ENTITY_VILLAGER_NO, SoundCategory.PLAYERS, 1, 1.2F);
+                p.sendMessage(ChatColor.RED + "Wait at least five seconds between dice rolls!");
+                lastCall.put(p, last + 500); // impatient bugger, aren't you? :P
+                return true;
+            }
+            lastCall.put(p, now);
+        }
+
         int count = plugin.getPluginConfig().getDefaultCount();
         int sides = plugin.getPluginConfig().getDefaultSides();
 
@@ -181,14 +296,20 @@ public class RollCommand implements CommandExecutor {
                 if (arg.matches("^[0-9]+$")) {
                     count = Integer.parseInt(arg);
                     break;
+                } else if (arg.matches("^[0-9]+d[0-9]+")) {
+                    int d = arg.indexOf('d');
+                    count = Integer.parseInt(arg.substring(0, d));
+                    break;
                 }
             }
         }
+
         /* Check for arguments representing dice sides */
         if (args.length > 0 && Perms.canRollAnyDice(sender)) {
             for (String arg : args) {
-                if (arg.matches("^d[0-9]+$")) {
-                    sides = Integer.parseInt(arg.substring(1));
+                if (arg.matches("^.*d[0-9]+$")) {
+                    int d = arg.indexOf('d');
+                    sides = Integer.parseInt(arg.substring(d + 1));
                     break;
                 }
             }
@@ -197,12 +318,12 @@ public class RollCommand implements CommandExecutor {
         /* Check the loaded or parsed values against the defined maximums. */
         if (count > plugin.getPluginConfig().getMaximumCount()) {
             sender.sendMessage(ChatColor.RED
-                    + "You can't roll that many dice at once");
+                    + "You can't roll that many dice at once!");
             return false;
         }
         if (sides > plugin.getPluginConfig().getMaximumSides()) {
             sender.sendMessage(ChatColor.RED
-                    + "You can't roll dice with that many sides");
+                    + "You can't roll dice with that many sides!");
             return false;
         }
 
@@ -215,16 +336,13 @@ public class RollCommand implements CommandExecutor {
      * Roll a set of dice for a user, and either broadcast the results publicly
      * or send them privately, depending on the user's permissions.
      *
-     * @param sender
-     *            The user rolling the dice
-     * @param count
-     *            The number of dice to roll
-     * @param sides
-     *            The number of sides per die
+     * @param sender The user rolling the dice
+     * @param count The number of dice to roll
+     * @param sides The number of sides per die
      */
     private void roll(CommandSender sender, int count, int sides) {
         Integer[] result = new Integer[count];
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < count; ++i) {
             result[i] = random.nextInt(sides) + 1;
         }
 
@@ -238,7 +356,7 @@ public class RollCommand implements CommandExecutor {
         if (Perms.broadcast(sender)) {
             broadcast(sender, finalOut);
         } else {
-            message(sender, finalOut);
+            message(sender, finalOut.replace("{CHANNEL}", ""));
         }
     }
 
@@ -246,34 +364,31 @@ public class RollCommand implements CommandExecutor {
      * Show personalized usage help to the user, taking into account his or her
      * permissions.
      *
-     * @param sender
-     *            The user to help
+     * @param sender The user to help
      */
     private void showHelp(CommandSender sender) {
         /* Treat the pair of booleans as 2^0 and 2^1 bits */
         int perms = (Perms.canRollMultiple(sender) ? 1 : 0)
                 + (Perms.canRollAnyDice(sender) ? 2 : 0);
         switch (perms) {
-        case 1:
-            sender.sendMessage(ChatColor.RED + "Usage: /roll [count]");
-            return;
-        case 2:
-            sender.sendMessage(ChatColor.RED + "Usage: /roll [d<sides>]");
-            return;
-        case 3:
-            sender.sendMessage(ChatColor.RED
-                    + "Usage: /roll [count] [d<sides>]");
-            return;
-        default:
-            sender.sendMessage(ChatColor.RED + "Usage: /roll");
+            case 1:
+                sender.sendMessage(ChatColor.RED + "Usage: /roll [count]");
+                return;
+            case 2:
+                sender.sendMessage(ChatColor.RED + "Usage: /roll [d<sides>]");
+                return;
+            case 3:
+                sender.sendMessage(ChatColor.RED + "Usage: /roll [count] [d<sides>]");
+                return;
+            default:
+                sender.sendMessage(ChatColor.RED + "Usage: /roll");
         }
     }
 
     /**
      * Square an input. Useful for decluttering the code.
      *
-     * @param input
-     *            The number to be squared
+     * @param input The number to be squared
      * @return The result
      */
     private int square(int input) {
@@ -283,8 +398,7 @@ public class RollCommand implements CommandExecutor {
     /**
      * Calculate the sum of an array of numbers.
      *
-     * @param roll
-     *            The array of numbers
+     * @param roll The array of numbers
      * @return The sum
      */
     private int sum(Integer[] roll) {
@@ -293,6 +407,30 @@ public class RollCommand implements CommandExecutor {
             t += i;
         }
         return t;
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender cs, Command cmnd, String string, String[] args) {
+        List<String> res = null;
+
+        if (args.length == 1) {
+            res = new ArrayList();
+            res.add("help");
+            res.add("d[sides]");
+            res.add("[count]");
+            if (Perms.canReload(cs)) {
+                res.add("reload");
+            }
+        } else if (args.length == 2 && args[0].matches("d[0-9]*")) {
+            res.add("[count]");
+        }
+
+        if (res != null && !res.isEmpty()) {
+            res = res.stream()
+                    .filter(e -> e != null && e.startsWith(args[args.length - 1]))
+                    .collect(Collectors.toList());
+        }
+        return res;
     }
 
 }

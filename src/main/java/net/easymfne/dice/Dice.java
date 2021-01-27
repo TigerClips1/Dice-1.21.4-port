@@ -15,7 +15,6 @@
 package net.easymfne.dice;
 
 import java.io.File;
-import java.util.Calendar;
 import java.util.logging.Level;
 
 import org.bukkit.ChatColor;
@@ -31,7 +30,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  */
 public class Dice extends JavaPlugin {
 
-    private Config config = null;
+    private Config config = new Config(this);
     private RollCommand rollCommand = null;
 
     /*
@@ -80,13 +79,13 @@ public class Dice extends JavaPlugin {
      */
     @Override
     public void onDisable() {
-        long start = Calendar.getInstance().getTimeInMillis();
+        long start = System.currentTimeMillis();
         fancyLog("=== DISABLE START ===");
         rollCommand.close();
         rollCommand = null;
         config = null;
         fancyLog("=== DISABLE COMPLETE ("
-                + (Calendar.getInstance().getTimeInMillis() - start)
+                + (System.currentTimeMillis() - start)
                 + "ms) ===");
     }
 
@@ -97,7 +96,7 @@ public class Dice extends JavaPlugin {
      */
     @Override
     public void onEnable() {
-        long start = Calendar.getInstance().getTimeInMillis();
+        long start = System.currentTimeMillis();
         fancyLog("=== ENABLE START ===");
         File configFile = new File(getDataFolder(), "config.yml");
         if (!configFile.exists()) {
@@ -105,10 +104,10 @@ public class Dice extends JavaPlugin {
             fancyLog("Saved default config.yml");
         }
 
-        config = new Config(this);
+        config.load();
         rollCommand = new RollCommand(this);
         fancyLog("=== ENABLE COMPLETE ("
-                + (Calendar.getInstance().getTimeInMillis() - start)
+                + (System.currentTimeMillis() - start)
                 + "ms) ===");
     }
 
@@ -116,11 +115,11 @@ public class Dice extends JavaPlugin {
      * Reload the plugin's configuration from disk and show how long it took.
      */
     public void reload() {
-        long start = Calendar.getInstance().getTimeInMillis();
+        long start = System.currentTimeMillis();
         fancyLog("=== RELOAD START ===");
-        reloadConfig();
+        config.load();
         fancyLog("=== RELOAD COMPLETE ("
-                + (Calendar.getInstance().getTimeInMillis() - start)
+                + (System.currentTimeMillis() - start)
                 + "ms) ===");
     }
 

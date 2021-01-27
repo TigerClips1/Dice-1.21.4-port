@@ -19,6 +19,15 @@ logging: false
 broadcast:
   crossworld: true
   range: -1
+  # if true, prefer to use the player's chat channel instead
+  useChannel: true
+
+# Use colors for dice results?
+natColors:
+  enable: true
+  normal: &a
+  fail: &c
+  crit: &e
 
 # Messages to send to the player (or the server, if they have broadcast perms
 #   {PLAYER}    The name of the player who rolled

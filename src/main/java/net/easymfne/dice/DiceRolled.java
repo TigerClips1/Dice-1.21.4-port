@@ -26,8 +26,8 @@ import org.bukkit.event.HandlerList;
 public final class DiceRolled extends Event {
 
 	private static final HandlerList handlers = new HandlerList();
-    private String message;
-    private Integer[] numbers;
+    private final String message;
+    private final Integer[] numbers;
 
     public DiceRolled(String event, Integer[] rolled) {
         message = event;

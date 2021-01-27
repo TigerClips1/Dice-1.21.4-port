@@ -1,5 +1,5 @@
 name: Dice
-version: '1.1'
+version: '1.2'
 description: Roll dice in-game via command
 
 author: EasyMFnE
@@ -7,6 +7,7 @@ author: EasyMFnE
 database: false
 main: net.easymfne.dice.Dice
 load: STARTUP
+softdepend: [LegendChat]
 
 commands:
   roll:
@@ -17,26 +18,30 @@ commands:
 permissions:
   dice.all:
     default: op
-    description: Allows access to everything
+    description: Allows access to all user permissions
     children:
       dice.roll: true
-      dice.reload: true
       dice.roll.any: true
       dice.roll.multiple: true
       dice.roll.broadcast: true
 
   dice.reload:
+    default: op
     description: 'Allow user to reload the configuration'
 
   dice.roll:
+    default: op
     description: 'Allow user to use the /roll command'
 
   dice.roll.any:
+    default: op
     description: 'Allow user to roll any-sided dice'
 
   dice.roll.multiple:
+    default: op
     description: 'Allow user to multiple dice at once'
 
   dice.roll.broadcast:
+    default: op
     description: 'Broadcast the results of the roll'
 
