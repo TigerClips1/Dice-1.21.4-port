@@ -86,7 +86,6 @@ public class RollCommand implements CommandExecutor, TabCompleter {
             if (plugin.getPluginConfig().useLegendChat) {
                 br.com.devpaulo.legendchat.channels.types.Channel ch
                         = br.com.devpaulo.legendchat.api.Legendchat.getPlayerManager().getPlayerFocusedChannel(p1);
-                ChatColor color1 = ChatColor.WHITE;
                 ChatColor color2 = ChatColor.WHITE;
 
                 final String colorStr = ch.getStringColor().toUpperCase();
@@ -94,19 +93,7 @@ public class RollCommand implements CommandExecutor, TabCompleter {
                     color2 = ChatColor.valueOf(colorStr);
                 }
 
-                final String format = br.com.devpaulo.legendchat.api.Legendchat.format(ch.getFormat());
-                int firstColorI = format.indexOf('&');
-                if (firstColorI != -1 && firstColorI < 20) {
-                    color1 = ChatColor.getByChar(format.charAt(firstColorI + 1));
-                } else {
-                    color1 = color2;
-                }
-
-                // This first bit is a hack, I admit. Probably need a better solution for channel identification.
-                message = color1.toString() + "[" + ch.getNickname() + "] "
-                        + message.replace("{CHANNEL}", color2.toString());
-
-                ch.sendMessage(message);
+                ch.sendMessage(p1, message.replace("{CHANNEL}", color2.toString()), LegendChatListener.magicFormat, false);
             }
             // TODO? add more plugins?
         } else {
@@ -415,9 +402,8 @@ public class RollCommand implements CommandExecutor, TabCompleter {
 
         if (args.length == 1) {
             res = new ArrayList();
+            res.add("1d6");
             res.add("help");
-            res.add("d[sides]");
-            res.add("[count]");
             if (Perms.canReload(cs)) {
                 res.add("reload");
             }

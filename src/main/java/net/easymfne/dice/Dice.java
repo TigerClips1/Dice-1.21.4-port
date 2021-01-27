@@ -105,6 +105,9 @@ public class Dice extends JavaPlugin {
         }
 
         config.load();
+        if(config.broadcast_useChannel) {
+            getServer().getPluginManager().registerEvents(new LegendChatListener(this), this); 
+        }
         rollCommand = new RollCommand(this);
         fancyLog("=== ENABLE COMPLETE ("
                 + (System.currentTimeMillis() - start)

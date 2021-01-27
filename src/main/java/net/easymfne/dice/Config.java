@@ -25,7 +25,7 @@ import org.bukkit.plugin.PluginManager;
  */
 public class Config {
 
-    private Dice plugin = null;
+    private final Dice plugin;
     public String message_broadcast,
             message_broadcast_multi,
             message_private,
@@ -81,7 +81,7 @@ public class Config {
 
         // plugin check
         PluginManager pm = plugin.getServer().getPluginManager();
-        if(pm.isPluginEnabled("LegendChat")) {
+        if(pm.getPlugin("LegendChat") != null) {
             useLegendChat = true;
         } else {
             broadcast_useChannel = false;
