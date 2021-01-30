@@ -7,7 +7,7 @@ author: EasyMFnE
 database: false
 main: net.easymfne.dice.Dice
 load: STARTUP
-softdepend: [LegendChat]
+softdepend: [LegendChat, DiscordSRV]
 
 commands:
   roll:

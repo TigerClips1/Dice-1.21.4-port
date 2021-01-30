@@ -79,6 +79,13 @@
             <version>1.1.5</version>
             <scope>provided</scope>
         </dependency>
+        <!-- Discord SRV -->
+        <dependency>
+            <groupId>com.discordsrv</groupId>
+            <artifactId>discordsrv</artifactId>
+            <version>LATEST</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

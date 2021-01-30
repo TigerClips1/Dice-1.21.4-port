@@ -14,8 +14,12 @@
  */
 package net.easymfne.dice;
 
+import github.scarsz.discordsrv.DiscordSRV;
 import java.io.File;
+import java.lang.reflect.Field;
+import java.util.List;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.bukkit.ChatColor;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -31,7 +35,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 public class Dice extends JavaPlugin {
 
     private Config config = new Config(this);
-    private RollCommand rollCommand = null;
+    protected RollCommand rollCommand = null;
+    private DiscordChatListener discordChat = null;
 
     /*
      * Strings used in the fancyLog() methods.
@@ -43,10 +48,8 @@ public class Dice extends JavaPlugin {
      * Log a message to the console using color, with a specific logging Level.
      * If there is no console open, log the message without any coloration.
      *
-     * @param level
-     *            Level at which the message should be logged
-     * @param message
-     *            The message to be logged
+     * @param level Level at which the message should be logged
+     * @param message The message to be logged
      */
     protected void fancyLog(Level level, String message) {
         if (getServer().getConsoleSender() != null) {
@@ -62,8 +65,7 @@ public class Dice extends JavaPlugin {
      * Log a message to the console using color, defaulting to the Info level.
      * If there is no console open, log the message without any coloration.
      *
-     * @param message
-     *            The message to be logged
+     * @param message The message to be logged
      */
     protected void fancyLog(String message) {
         fancyLog(Level.INFO, message);
@@ -84,6 +86,10 @@ public class Dice extends JavaPlugin {
         rollCommand.close();
         rollCommand = null;
         config = null;
+        if(discordChat != null) {
+            DiscordSRV.api.unsubscribe(discordChat);
+            discordChat = null;
+        }
         fancyLog("=== DISABLE COMPLETE ("
                 + (System.currentTimeMillis() - start)
                 + "ms) ===");
@@ -105,8 +111,22 @@ public class Dice extends JavaPlugin {
         }
 
         config.load();
-        if(config.broadcast_useChannel) {
-            getServer().getPluginManager().registerEvents(new LegendChatListener(this), this); 
+        if (config.broadcast_useChannel) {
+            getServer().getPluginManager().registerEvents(new LegendChatListener(this), this);
+        }
+        if (getServer().getPluginManager().getPlugin("DiscordSRV") != null) {
+//            try {
+//                Field f = github.scarsz.discordsrv.api.ApiManager.class.getDeclaredField("apiListeners");
+//                f.setAccessible(true);
+//                for (Object o : ((List) f.get(DiscordSRV.api)).toArray()) {
+//                    if (o.getClass().getSimpleName().equalsIgnoreCase("DiscordChatListener")) {
+//                        DiscordSRV.api.unsubscribe(o);
+//                    }
+//                }
+//            } catch (Exception ex) {
+//                Logger.getLogger(Dice.class.getName()).log(Level.SEVERE, null, ex);
+//            }
+            DiscordSRV.api.subscribe(discordChat = new DiscordChatListener(this));
         }
         rollCommand = new RollCommand(this);
         fancyLog("=== ENABLE COMPLETE ("

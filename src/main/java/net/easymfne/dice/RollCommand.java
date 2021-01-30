@@ -43,7 +43,7 @@ public class RollCommand implements CommandExecutor, TabCompleter {
 
     private final Dice plugin;
     private final Random random = new Random();
-    private final Set<String> colors = new HashSet(Arrays.asList(
+    protected final Set<String> colors = new HashSet(Arrays.asList(
             "BLACK", "DARK_BLUE", "DARK_GREEN", "DARK_AQUA", "DARK_RED",
             "DARK_PURPLE", "GOLD", "GRAY", "DARK_GRAY", "BLUE", "GREEN",
             "AQUA", "RED", "LIGHT_PURPLE", "YELLOW", "WHITE", "MAGIC",
@@ -148,6 +148,26 @@ public class RollCommand implements CommandExecutor, TabCompleter {
         result = result
                 .replace("{PLAYER}", sender.getName())
                 .replace("{NICKNAME}", formatName(sender))
+                .replace("{RESULT}", plugin.getPluginConfig().natColors_enabled ? formatResults(roll, sides) : StringUtils.join(roll, ", "))
+                .replace("{COUNT}", String.valueOf(roll.length))
+                .replace("{SIDES}", String.valueOf(sides))
+                .replace("{TOTAL}", plugin.getPluginConfig().natColors_enabled ? formatResultTotal(roll, sides) : String.valueOf(sum(roll)));
+        return ChatColor.translateAlternateColorCodes('&', result);
+    }
+    
+    protected String formatString(String sender, Integer[] roll, int sides) {
+        String result;
+        if (roll.length > 1) {
+            result = plugin.getPluginConfig().message_broadcast_multi;
+        } else {
+            result = plugin.getPluginConfig().getBroadcastMessage();
+        }
+        if (result == null || result.length() == 0) {
+            return null;
+        }
+        result = result
+                .replace("{PLAYER}", sender)
+                .replace("{NICKNAME}", sender)
                 .replace("{RESULT}", plugin.getPluginConfig().natColors_enabled ? formatResults(roll, sides) : StringUtils.join(roll, ", "))
                 .replace("{COUNT}", String.valueOf(roll.length))
                 .replace("{SIDES}", String.valueOf(sides))
