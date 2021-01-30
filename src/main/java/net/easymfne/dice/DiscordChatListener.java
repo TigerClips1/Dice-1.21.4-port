@@ -74,6 +74,9 @@ public class DiscordChatListener {
             }
 
             String nick = event.getGuild().getMember(event.getAuthor()).getNickname();
+            if(nick == null) {
+                nick = event.getAuthor().getName();
+            }
             String finalOut = plugin.rollCommand.formatString(nick, result, sides);
 
             // send out a custom event
