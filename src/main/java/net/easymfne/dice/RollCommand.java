@@ -21,6 +21,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang.StringUtils;
@@ -50,7 +52,8 @@ public class RollCommand implements CommandExecutor, TabCompleter {
             "BOLD", "STRIKETHROUGH", "UNDERLINE", "ITALIC", "RESET")
     );
     private final HashMap<Player, Long> lastCall = new HashMap<>();
-
+	private final static Pattern diceParts = Pattern.compile("^(([0-9]+)?d)?([0-9]+)((\\+|\\-)([0-9]+))?$");
+	
     /**
      * Instantiate by getting a reference to the plugin instance, creating a new
      * Random, and registering this class to handle the '/roll' command.
@@ -129,9 +132,10 @@ public class RollCommand implements CommandExecutor, TabCompleter {
      * @param sender The user that rolled the dice
      * @param roll The results of the roll, as an array
      * @param sides The number of sides on the dice
+	 * @param mod Modifier for the end result
      * @return The fancy-formatted message
      */
-    private String formatString(CommandSender sender, Integer[] roll, int sides) {
+    private String formatString(CommandSender sender, Integer[] roll, int sides, int mod) {
         String result;
         if (Perms.broadcast(sender)) {
             if (roll.length > 1) {
@@ -148,14 +152,15 @@ public class RollCommand implements CommandExecutor, TabCompleter {
         result = result
                 .replace("{PLAYER}", sender.getName())
                 .replace("{NICKNAME}", formatName(sender))
-                .replace("{RESULT}", plugin.getPluginConfig().natColors_enabled ? formatResults(roll, sides) : StringUtils.join(roll, ", "))
+                .replace("{RESULT}", plugin.getPluginConfig().natColors_enabled ? formatResults(roll, sides, mod) : String.valueOf(roll[0] + mod))
                 .replace("{COUNT}", String.valueOf(roll.length))
                 .replace("{SIDES}", String.valueOf(sides))
-                .replace("{TOTAL}", plugin.getPluginConfig().natColors_enabled ? formatResultTotal(roll, sides) : String.valueOf(sum(roll)));
+                .replace("{MOD}", mod == 0 ? "" : (mod > 0 ? "+" : "") + String.valueOf(mod))
+                .replace("{TOTAL}", plugin.getPluginConfig().natColors_enabled ? formatResultTotal(roll, sides, mod) : String.valueOf(sum(roll) + mod));
         return ChatColor.translateAlternateColorCodes('&', result);
     }
     
-    protected String formatString(String sender, Integer[] roll, int sides) {
+    protected String formatString(String sender, Integer[] roll, int sides, int mod) {
         String result;
         if (roll.length > 1) {
             result = plugin.getPluginConfig().message_broadcast_multi;
@@ -168,21 +173,22 @@ public class RollCommand implements CommandExecutor, TabCompleter {
         result = result
                 .replace("{PLAYER}", sender)
                 .replace("{NICKNAME}", sender)
-                .replace("{RESULT}", plugin.getPluginConfig().natColors_enabled ? formatResults(roll, sides) : StringUtils.join(roll, ", "))
+                .replace("{RESULT}", plugin.getPluginConfig().natColors_enabled ? formatResults(roll, sides, mod) : String.valueOf(roll[0] + mod))
                 .replace("{COUNT}", String.valueOf(roll.length))
                 .replace("{SIDES}", String.valueOf(sides))
-                .replace("{TOTAL}", plugin.getPluginConfig().natColors_enabled ? formatResultTotal(roll, sides) : String.valueOf(sum(roll)));
+                .replace("{MOD}", mod == 0 ? "" : (mod > 0 ? "+" : "") + String.valueOf(mod))
+                .replace("{TOTAL}", plugin.getPluginConfig().natColors_enabled ? formatResultTotal(roll, sides, mod) : String.valueOf(sum(roll) + mod));
         return ChatColor.translateAlternateColorCodes('&', result);
     }
 
-    private String formatResultTotal(Integer[] roll, int max) {
+    private String formatResultTotal(Integer[] roll, int max, int mod) {
         int median = (int) Math.floor(max / 3.) * roll.length;
         max *= roll.length;
-        int total = sum(roll);
+        int total = sum(roll) + mod;
 
-        if (total == roll.length) {
+        if (total <= roll.length) {
             return plugin.getPluginConfig().natColors_critfail + total;
-        } else if (total == max) {
+        } else if (total >= max) {
             return plugin.getPluginConfig().natColors_critcrit + total;
         } else if (total < median) {
             return plugin.getPluginConfig().natColors_fail + total;
@@ -192,8 +198,9 @@ public class RollCommand implements CommandExecutor, TabCompleter {
         return plugin.getPluginConfig().natColors_normal + total;
     }
 
-    private String formatResults(Integer[] roll, int max) {
+    private String formatResults(Integer[] roll, int max, int mod) {
         int median = (int) Math.floor(max / 3.);
+		roll[0] += mod;
         if (roll.length == 1) {
             if (roll[0] == 1) {
                 return plugin.getPluginConfig().natColors_critfail + roll[0];
@@ -288,7 +295,7 @@ public class RollCommand implements CommandExecutor, TabCompleter {
             if (last != null && now - last < 5600) {
                 p.playSound(p.getEyeLocation(), Sound.ENTITY_VILLAGER_NO, SoundCategory.PLAYERS, 1, 1.2F);
                 p.sendMessage(ChatColor.RED + "Wait at least five seconds between dice rolls!");
-                lastCall.put(p, last + 500); // impatient bugger, aren't you? :P
+                lastCall.put(p, last + 1500); // impatient bugger, aren't you? :P
                 return true;
             }
             lastCall.put(p, now);
@@ -296,8 +303,31 @@ public class RollCommand implements CommandExecutor, TabCompleter {
 
         int count = plugin.getPluginConfig().getDefaultCount();
         int sides = plugin.getPluginConfig().getDefaultSides();
-
-        /* Check for arguments representing dice count */
+		int mod = 0;
+		
+		if (args.length > 0) {
+			// parse command:
+			Matcher m = diceParts.matcher(args[0]);
+			if(m.find()) {
+				if (m.group(1) == null) {
+					// did not find a 'd' in the argument, so group 3 is the count
+					count = Integer.parseInt(m.group(3));
+				} else {
+					sides = Integer.parseInt(m.group(3));
+					if (m.group(2) != null) {
+						count = Integer.parseInt(m.group(2));
+					}
+				}
+				if (m.group(6) != null) {
+					mod = Integer.parseInt(m.group(6));
+					if (m.group(5).charAt(0) == '-') {
+						mod *= -1;
+					}
+				}
+			}
+		}
+	
+        /* Check for arguments representing dice count * /
         if (args.length > 0 && Perms.canRollMultiple(sender)) {
             for (String arg : args) {
                 if (arg.matches("^[0-9]+$")) {
@@ -311,7 +341,7 @@ public class RollCommand implements CommandExecutor, TabCompleter {
             }
         }
 
-        /* Check for arguments representing dice sides */
+        /* Check for arguments representing dice sides * /
         if (args.length > 0 && Perms.canRollAnyDice(sender)) {
             for (String arg : args) {
                 if (arg.matches("^.*d[0-9]+$")) {
@@ -320,7 +350,7 @@ public class RollCommand implements CommandExecutor, TabCompleter {
                     break;
                 }
             }
-        }
+        }*/
 
         /* Check the loaded or parsed values against the defined maximums. */
         if (count > plugin.getPluginConfig().getMaximumCount()) {
@@ -335,7 +365,7 @@ public class RollCommand implements CommandExecutor, TabCompleter {
         }
 
         /* Roll the dice and handle the outcome */
-        roll(sender, Math.max(1, count), Math.max(2, sides));
+        roll(sender, Math.max(1, count), Math.max(2, sides), mod);
         return true;
     }
 
@@ -346,14 +376,15 @@ public class RollCommand implements CommandExecutor, TabCompleter {
      * @param sender The user rolling the dice
      * @param count The number of dice to roll
      * @param sides The number of sides per die
+     * @param mod Modifier for the end result
      */
-    private void roll(CommandSender sender, int count, int sides) {
+    private void roll(CommandSender sender, int count, int sides, int mod) {
         Integer[] result = new Integer[count];
         for (int i = 0; i < count; ++i) {
             result[i] = random.nextInt(sides) + 1;
         }
 
-        String finalOut = formatString(sender, result, sides);
+        String finalOut = formatString(sender, result, sides, mod);
 
         // send out a custom event
         DiceRolled event = new DiceRolled(finalOut, result);

@@ -8,6 +8,8 @@ import github.scarsz.discordsrv.api.Subscribe;
 import github.scarsz.discordsrv.api.events.DiscordGuildMessagePreProcessEvent;
 import github.scarsz.discordsrv.dependencies.jda.api.entities.Emote;
 import java.util.Random;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 
@@ -16,6 +18,7 @@ public class DiscordChatListener {
     private final Dice plugin;
     Emote errorEmote = null;
     private final Random random = new Random();
+	private final static Pattern diceParts = Pattern.compile("^(([0-9]+)?d)?([0-9]+)((\\+|\\-)([0-9]+))?$");
 
     public DiscordChatListener(Dice plugin) {
         this.plugin = plugin;
@@ -24,39 +27,37 @@ public class DiscordChatListener {
     @Subscribe(priority = ListenerPriority.LOW)
     public void onDiscordGuildMessagePreProcessEvent(DiscordGuildMessagePreProcessEvent event) {
         final String msg = event.getMessage().getContentRaw();
-        if (msg.startsWith("/roll")) {
+        if (msg.startsWith("/roll") || msg.startsWith("!roll")) {
             event.setCancelled(true);
             int i = msg.indexOf(' ');
             String args[] = i == -1 ? new String[0] : msg.substring(i + 1).split(" ");
 
-            int count = plugin.getPluginConfig().getDefaultCount();
-            int sides = plugin.getPluginConfig().getDefaultSides();
+			int count = plugin.getPluginConfig().getDefaultCount();
+			int sides = plugin.getPluginConfig().getDefaultSides();
+			int mod = 0;
 
-            /* Check for arguments representing dice count */
-            if (args.length > 0) {
-                for (String arg : args) {
-                    if (arg.matches("^[0-9]+$")) {
-                        count = Integer.parseInt(arg);
-                        break;
-                    } else if (arg.matches("^[0-9]+d[0-9]+")) {
-                        int d = arg.indexOf('d');
-                        count = Integer.parseInt(arg.substring(0, d));
-                        break;
-                    }
-                }
-            }
-
-            /* Check for arguments representing dice sides */
-            if (args.length > 0) {
-                for (String arg : args) {
-                    if (arg.matches("^.*d[0-9]+$")) {
-                        int d = arg.indexOf('d');
-                        sides = Integer.parseInt(arg.substring(d + 1));
-                        break;
-                    }
-                }
-            }
-
+			if (args.length > 0) {
+				// parse command:
+				Matcher m = diceParts.matcher(args[0]);
+				if(m.find()) {
+					if (m.group(1) == null) {
+						// did not find a 'd' in the argument, so group 3 is the count
+						count = Integer.parseInt(m.group(3));
+					} else {
+						sides = Integer.parseInt(m.group(3));
+						if (m.group(2) != null) {
+							count = Integer.parseInt(m.group(2));
+						}
+					}
+					if (m.group(6) != null) {
+						mod = Integer.parseInt(m.group(6));
+						if (m.group(5).charAt(0) == '-') {
+							mod *= -1;
+						}
+					}
+				}
+			}
+	
             /* Check the loaded or parsed values against the defined maximums. */
             if (count > plugin.getPluginConfig().getMaximumCount()
                     || sides > plugin.getPluginConfig().getMaximumSides()) {
@@ -77,7 +78,7 @@ public class DiscordChatListener {
             if(nick == null) {
                 nick = event.getAuthor().getName();
             }
-            String finalOut = plugin.rollCommand.formatString(nick, result, sides);
+            String finalOut = plugin.rollCommand.formatString(nick, result, sides, mod);
 
             // send out a custom event
             plugin.getServer().getScheduler().runTask(plugin,
