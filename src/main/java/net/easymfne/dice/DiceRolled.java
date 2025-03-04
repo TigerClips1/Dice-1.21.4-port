@@ -1,3 +1,4 @@
+
 /*
  * This file is part of the Dice plugin by EasyMFnE.
  *
@@ -16,6 +17,7 @@ package net.easymfne.dice;
 
 import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Implements custom DiceRolled event, so other plugins can possibly listen
@@ -43,7 +45,7 @@ public final class DiceRolled extends Event {
     }
 
     @Override
-	public HandlerList getHandlers() {
+	public @NotNull HandlerList getHandlers() {
         return handlers;
     }
 

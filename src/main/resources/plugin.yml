@@ -3,7 +3,7 @@ version: '1.2'
 description: Roll dice in-game via command
 
 author: EasyMFnE
-api-version: 1.13
+api-version: 1.21
 database: false
 main: net.easymfne.dice.Dice
 load: STARTUP

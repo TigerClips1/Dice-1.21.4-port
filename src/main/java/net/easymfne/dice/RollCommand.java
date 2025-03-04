@@ -25,7 +25,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import org.apache.commons.lang.StringUtils;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Sound;
@@ -35,6 +36,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * The class that handles all console and player commands for the plugin.
@@ -158,6 +160,7 @@ public class RollCommand implements CommandExecutor, TabCompleter {
                 .replace("{MOD}", mod == 0 ? "" : (mod > 0 ? "+" : "") + String.valueOf(mod))
                 .replace("{TOTAL}", plugin.getPluginConfig().natColors_enabled ? formatResultTotal(roll, sides, mod) : String.valueOf(sum(roll) + mod));
         return ChatColor.translateAlternateColorCodes('&', result);
+
     }
     
     protected String formatString(String sender, Integer[] roll, int sides, int mod) {
@@ -274,7 +277,7 @@ public class RollCommand implements CommandExecutor, TabCompleter {
      * must be prefixed with 'd'.
      */
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
         if (args.length == 1) {
             if (args[0].equalsIgnoreCase("help")
                     || args[0].equalsIgnoreCase("?")) {
